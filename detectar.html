@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <title>Detección de Movimiento</title>
+        <style>
+            html,body{background: black;}
+            video{display: none;}
+            canvas{position: absolute;top:0px;left: 0px;}
+            #lienzo2{opacity: 0.5;}
+        </style>
+    </head>
+    <body>
+        <canvas id="lienzo" width="640px" height="480px"></canvas>
+        <canvas id="lienzo2" width="640px" height="480px"></canvas>
+        <video id="video" autoplay></video>
+        <script>
+            //zona declaratica
+            const video=document.getElementById("video");
+            const lienzo=document.getElementById("lienzo");
+            const lienzo2=document.getElementById("lienzo2");
+            const contexto=lienzo.getContext("2d");
+            const contexto2=lienzo2.getContext("2d");
+            contexto2.fillStryle="rgba(255,255,255,0.05)"
+            var cuadrosX=[]
+            var cuadrosY=[]
+            var atencionX=[]
+            var atencionY=[]
+
+            //cantidad de pixeles para realizar comparación
+            const preguntarPixel=16;
+            //contenedor de pixeles del fotograma inicial
+            var pixelesViejos=[];
+            //contenedor de pixeles del fotograma más reciente
+            var pixelesNuevos=[];
+            var contador=0;
+
+            navigator.mediaDevices.getUserMedia({video:true})
+                .then(function(flujo){
+                    video.srcObject=flujo;
+                })
+                .catch(function(error){
+                    console.log("error: "+error)
+                })
+            
+            function videoCanvas(){
+                cuadrosX=[]
+                cuadrosY=[]
+                //sobre el canvas se carga el video porque en el canvas si puedo tocar pixeles
+                contexto.drawImage(video,0,0,lienzo.width,lienzo.height);
+                //creación capa semi transparente 
+                contexto2.fillRect(0,0,640,480)
+                //cargo valor del pixel mas nuevo sobre el anterior
+                pixelesViejos=pixelesNuevos
+                //reiniciado de info contenida en pixeles nuevos
+                pixelesNuevos=[];
+                //repaso de imagen en X e Y aumentando según un valor determinado 
+                for(let x=0;x<640;x+=preguntarPixel){
+                    for(let y=0; y<480;y+=preguntarPixel){
+                        //capturo el valor del pixel y se lo mando al pixel nuevo
+                        let pixel=contexto.getImageData(x,y,1,1);
+                        pixelesNuevos.push({
+                            data:pixel.data,
+                            x:x,
+                            y:y
+                        })
+                    }
+                }
+                //Desde la segunda iteración 
+                if(contador>0){
+                    //Recorro el arreglo y tomo valores nuevos y viejos para compararlos después
+                    for(let i=0; i<pixelesNuevos.length;i++){
+                        let rojoNuevo=pixelesNuevos[i].data[0]
+                        let rojoViejo=pixelesViejos[i].data[0]
+                        let verdeNuevo=pixelesNuevos[i].data[1]
+                        let verdeViejo=pixelesViejos[i].data[1]
+                        let azulNuevo=pixelesNuevos[i].data[2]
+                        let azulViejo=pixelesViejos[i].data[2]
+                        let diferenciaRojo=Math.abs(rojoNuevo-rojoViejo)
+                        let diferenciaVerde=Math.abs(verdeNuevo-verdeViejo)
+                        let diferenciaAzul=Math.abs(azulNuevo-azulViejo)
+                        let promedio=(diferenciaRojo+diferenciaVerde+diferenciaAzul)/3
+                        //Suposición: si la diferencia es grande hay movimiento
+                        if(promedio>15){
+                            //en caso de movimiento dibuja para saber que funciona el programa
+                            contexto2.strokeRect(
+                                pixelesNuevos[i].x,
+                                pixelesNuevos[i].y,
+                                preguntarPixel,
+                                preguntarPixel)
+                            if(typeof([pixelesNuevos[i].x])=='undefine'){
+                                cuadrosX[pixelesNuevos[i].x]==1
+                            }else{
+                                cuadrosX[pixelesNuevos[i].x]++
+                            }
+                            if(typeof([pixelesNuevos[i].y])=='undefine'){
+                                cuadrosY[pixelesNuevos[i].y]==1
+                            }else{
+                                cuadrosY[pixelesNuevos[i].y]++
+                            }
+                        }
+                    }
+                }
+                //Busqueda max X e Y
+                let maxX=0
+                let maxY=0
+                let maxCuentaX=0;
+                let maxCuentaY=0;
+                cuadrosX.forEach(function(number, index){
+                    if(number>maxCuentaX){
+                        maxCuentaX=number;
+                        maxX=index
+                    }
+                });
+                cuadrosY.forEach(function(number, index){
+                    if(number>maxCuentaY){
+                        maxCuentaY=number;
+                        maxY=index
+                    }
+                });
+                if(maxX!=0){
+                    atencionX.push(maxX)
+                    atencionY.push(maxY)
+                    if(atencionX.length>10){
+                        atencionX.splice(0,1)
+                        atencionY.splice(0,1)
+                    }
+                    let sumaX=0;
+                    let sumaY=0;
+                    for(let i=0;i<=10;i++){
+                        sumaX+=atencionX[i]
+                        sumaY+=atencionY[i]
+                    }
+                    sumaX/=10
+                    sumaY/=10
+                    //dibujar linea vertical
+                    contexto2.beginPath();
+                    contexto2.moveTo(maxX,0)
+                    contexto2.lineTo(maxX,480)
+                    contexto2.stroke();
+                    //dibujar linea horizontal
+                    contexto2.beginPath();
+                    contexto2.moveTo(0,maxY)
+                    contexto2.lineTo(640,maxY)
+                    contexto2.stroke();
+                    //dibujar Circulo y punto atención 
+                    contexto2.beginPath()
+                    contexto2.arc(maxX,maxY,30,0,Math.PI*2,true)
+                    contexto2.stroke()
+
+                    contexto2.fillStryle="red"
+                    contexto2.beginPath()
+                    contexto2.arc(sumaX,sumaY,10,0,Math.PI*2,true)
+                    contexto2.fill()
+                }
+                contador++;
+                requestAnimationFrame(videoCanvas)
+                
+            }
+            video.addEventListener('play',function(){
+                videoCanvas()
+            })
+        </script>
+    </body>
+</html>
